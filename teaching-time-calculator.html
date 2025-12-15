@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Teaching Time Calculator</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 80px repeat(5, 1fr); /* time + Mon-Fri */
+      border: 1px solid #ccc;
+      user-select: none;
+    }
+    .cell {
+      border: 1px solid #e0e0e0;
+      height: 22px;
+      cursor: pointer;
+    }
+    .time-label {
+      font-size: 12px;
+      text-align: right;
+      padding-right: 5px;
+      background: #fafafa;
+      cursor: default;
+      pointer-events: none; /* Prevent blocking clicks */
+    }
+    .day-label {
+      text-align: center;
+      font-weight: 600;
+      background: #f0f0f0;
+      border: 1px solid #ccc;
+      padding: 4px 0;
+    }
+    .active {
+      background: #4ade80;
+    }
+    .instructions {
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+    button {
+      margin-top: 12px;
+      padding: 6px 12px;
+      font-size: 14px;
+    }
+    textarea {
+      width: 100%;
+      margin-top: 10px;
+      height: 120px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Teaching Time Calculator</h1>
+  <div class="instructions">
+    Click to mark your teaching times in 15-minute increments and your Total Teaching Time will be shown at the bottom of this form.
+  </div>
+
+  <div id="schedule" class="grid"></div>
+
+  <button onclick="exportAvailability()">Export Time (JSON)</button>
+  <button onclick="submitAvailability()" style="margin-left:8px;">Submit Time</button>
+  <div id="totalTime" style="margin-top:10px;font-weight:600;">Total Selected Time: 0 hours 0 minutes</div>
+  <textarea id="output" placeholder="Your availability data will appear here..."></textarea>
+
+  <script>
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    const startHour = 7;
+    const endHour = 17;
+    const grid = document.getElementById("schedule");
+
+    let mouseDown = false;
+    let toggleState = true;
+
+    document.body.addEventListener("mousedown", () => mouseDown = true);
+    document.body.addEventListener("mouseup", () => mouseDown = false);
+
+    // Blank top-left corner cell
+    grid.appendChild(document.createElement("div"));
+
+    // Day headers (Mon-Fri)
+    days.forEach(day => {
+      const d = document.createElement("div");
+      d.className = "day-label";
+      d.textContent = day;
+      grid.appendChild(d);
+    });
+
+    function formatTime(hour, minute) {
+      const h = ((hour + 11) % 12) + 1;
+      const ampm = hour < 12 ? "AM" : "PM";
+      return `${h}:${minute.toString().padStart(2, "0")} ${ampm}`;
+    }
+
+    for (let hour = startHour; hour < endHour; hour++) {
+      for (let q = 0; q < 4; q++) {
+        const minute = q * 15;
+
+        // Time label for every 15-min increment
+        const timeCell = document.createElement("div");
+        timeCell.className = "time-label";
+        timeCell.textContent = formatTime(hour, minute);
+        grid.appendChild(timeCell);
+
+        days.forEach(day => {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.dataset.day = day;
+          cell.dataset.time = `${hour}:${minute.toString().padStart(2, "0")}`;
+
+          cell.addEventListener("mousedown", () => {
+            toggleState = !cell.classList.contains("active");
+            cell.classList.toggle("active", toggleState);
+            updateTotalTime();
+          });
+
+          cell.addEventListener("mouseover", () => {
+            if (mouseDown) {
+              cell.classList.toggle("active", toggleState);
+              updateTotalTime();
+            }
+          });
+
+          grid.appendChild(cell);
+        });
+      }
+    }
+
+    function exportAvailability() {
+      const availability = {};
+      document.querySelectorAll('.cell.active').forEach(cell => {
+        if (!availability[cell.dataset.day]) {
+          availability[cell.dataset.day] = [];
+        }
+        availability[cell.dataset.day].push(cell.dataset.time);
+      });
+      document.getElementById("output").value = JSON.stringify(availability, null, 2);
+    }
+
+    function updateTotalTime() {
+      const totalCells = document.querySelectorAll('.cell.active').length;
+      const totalMinutes = totalCells * 15;
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      document.getElementById('totalTime').textContent = `Total Selected Time: ${hours} hours ${minutes} minutes`;
+      return { totalMinutes, hours, minutes };
+    }
+
+    function submitAvailability() {
+      const availability = {};
+      document.querySelectorAll('.cell.active').forEach(cell => {
+        if (!availability[cell.dataset.day]) {
+          availability[cell.dataset.day] = [];
+        }
+        availability[cell.dataset.day].push(cell.dataset.time);
+      });
+
+      const totals = updateTotalTime();
+
+      const payload = {
+        timestamp: new Date().toISOString(),
+        availability: availability,
+        totalMinutes: totals.totalMinutes
+      };
+
+	fetch("https://script.google.com/macros/s/AKfycbwUeRGDEIQ1SBbonmBKAzS28xIZvaDdr1xuoaf2BgAYplbN2W0rnBvy8b0iZRBHbEb1/exec", {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      alert("Your availability has been submitted successfully.");
+    }
+  </script>
+</body>
+</html>
